@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "musicleak"
+version = "0.1.0a1"
+description = "Find stretches of generated music that match songs in a reference set (such as training data), even after pitch, tempo, reverb or MP3 changes. Reports where, how far shifted, and how sure."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Boobalan Arjunan" }]
+maintainers = [{ name = "Boobalan Arjunan" }]
+keywords = ["music", "audio", "memorization", "data-leakage", "copyright", "generative-music", "chroma", "dataset", "quality-check", "machine-learning"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Sound/Audio :: Analysis",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = ["numpy", "scipy", "soundfile"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "librosa"]
+
+[project.urls]
+Homepage = "https://github.com/BoobalanArjunan/musicleak"
+Issues = "https://github.com/BoobalanArjunan/musicleak/issues"
+Source = "https://github.com/BoobalanArjunan/musicleak"
+
+[project.scripts]
+musicleak = "musicleak.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
