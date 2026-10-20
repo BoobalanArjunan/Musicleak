@@ -225,9 +225,28 @@ def scan_query(name: str, C: np.ndarray, lib: Library, cal: Calibration, win_s: 
             res.matches.append(_make_match("confirmed", seq[k:j + 1], lib, win))
             used.update(range(k, j + 1))
         k = j + 1
-    for k, e in enumerate(seq):                                   # lone windows above the stricter single level
-        if e is not None and k not in used and e[2].score >= cal.single:
-            res.matches.append(_make_match("possible", [e], lib, win))
+    # Adaptive refinement: for isolated high-confidence windows (>= cal.single) not chained on the coarse grid,
+    # probe a half-step offset specifically against that reference to verify consistent temporal tracking
+    for k in range(len(seq)):
+        if seq[k] is not None and k not in used and seq[k][2].score >= cal.single:
+            w0, bi, h = seq[k]
+            confirmed_sub = False
+            for probe_w0 in [w0 + hop // 2, w0 - hop // 2]:
+                if 0 <= probe_w0 and probe_w0 + win <= C.shape[1]:
+                    h_probe = best_in_ref(C[:, probe_w0:probe_w0 + win], lib.refs[bi])
+                    if h_probe is not None and h_probe.score >= cal.chain:
+                        h1 = (bi, h, 0) if w0 < probe_w0 else (bi, h_probe, 0)
+                        h2 = (bi, h_probe, 0) if probe_w0 > w0 else (bi, h, 0)
+                        dt = abs(probe_w0 - w0)
+                        if _consistent(h1, h2, dt):
+                            sub_chain = [(min(w0, probe_w0), bi, h if w0 < probe_w0 else h_probe),
+                                         (max(w0, probe_w0), bi, h_probe if probe_w0 > w0 else h)]
+                            res.matches.append(_make_match("confirmed", sub_chain, lib, win))
+                            used.add(k)
+                            confirmed_sub = True
+                            break
+            if not confirmed_sub:
+                res.matches.append(_make_match("possible", [seq[k]], lib, win))
     res.matches.sort(key=lambda m: m.q_start)
     return res
 
