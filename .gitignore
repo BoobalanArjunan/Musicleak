@@ -12,3 +12,5 @@ real_check/
 .coverage
 htmlcov/
 scratch/
+data/
+real_check_quick/
