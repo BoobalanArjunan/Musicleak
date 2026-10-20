@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import argparse
 import collections
+import itertools
+import json
 import os
 import shutil
 import statistics as st
@@ -102,23 +104,13 @@ def main():
     ap.add_argument("--out", type=Path, default=Path("real_check"))
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
-    import itertools
-
-    default_ref = Path("data/real_eval/reference")
-    default_unrel = Path("data/real_eval/unrelated")
-
     if not a.musdb and not (a.reference_dir and a.unrelated_dir):
-        if default_ref.is_dir() and default_unrel.is_dir():
-            a.reference_dir = default_ref
-            a.unrelated_dir = default_unrel
-        else:
-            sys.exit("give --musdb, or both --reference-dir and --unrelated-dir")
+        sys.exit("give --musdb, or both --reference-dir and --unrelated-dir")
     ref_files, unrel_files = find_songs(a)
     if len(ref_files) < 10 or len(unrel_files) < 10:
         sys.exit(f"need at least 10 reference and 10 unrelated songs (found {len(ref_files)} and {len(unrel_files)})")
     rng = np.random.RandomState(a.seed)
-    n_refs = min(a.refs, len(ref_files))
-    ref_files = [ref_files[i] for i in rng.permutation(len(ref_files))[:n_refs]]
+    ref_files = [ref_files[i] for i in rng.permutation(len(ref_files))[:a.refs]]
     unrel_files = [unrel_files[i] for i in rng.permutation(len(unrel_files))]
     lengths = [int(v) for v in a.lengths.split(",")]
     out = a.out
@@ -138,12 +130,11 @@ def main():
         s = int((len(x) - n) * (rng.rand() if start_frac is None else start_frac)) if len(x) > n else 0
         return norm(x[s:s + n])
 
-    notes, truth = [], {}
+    notes, truth, where = [], {}, {}
     # --- unrelated clips
-    pool = itertools.cycle(unrel_files)
+    pool = itertools.cycle(unrel_files)                                  # small sets: songs are reused instead of running out
     unrel_names = []
-    n_unrelated = min(a.unrelated, len(unrel_files)) if a.unrelated == 40 and len(unrel_files) < 40 else a.unrelated
-    for i in range(n_unrelated):
+    for i in range(a.unrelated):
         p = next(pool)
         name = f"unrelated_{i:03d}.wav"
         sf.write(str(out / "queries" / name), clip(p, a.clip_s), FS)
@@ -164,10 +155,13 @@ def main():
                 src = ref_files[rng.randint(len(ref_files))]
                 ri = [i for i, q in enumerate(ref_files) if q == src][0]
                 x = load_mono(src)
-                start = int(rng.uniform(15, max(16, len(x) / FS - L - 15)) * FS)
+                start = int(rng.uniform(15, max(16, len(x) / FS - L - 15)) * FS) if len(x) / FS > L + 31 else \
+                    int(rng.uniform(0, max(1, len(x) - int(L * FS))))
                 piece = x[start:start + int(L * FS)]
+                if len(piece) < int(L * FS):
+                    piece = np.pad(piece, (0, int(L * FS) - len(piece)))
                 edited, trans, tempo = fn(piece.astype(np.float32))
-                host = clip(next(pool, unrel_files[1]), a.clip_s)
+                host = clip(next(pool), a.clip_s)
                 at = int(rng.uniform(5, max(6, a.clip_s - L * 1.15 - 5)) * FS)
                 q = 0.15 * host
                 end = min(len(q), at + len(edited))
@@ -175,6 +169,9 @@ def main():
                 qname = f"copy_{len(truth):03d}.wav"
                 sf.write(str(out / "queries" / qname), norm(q), FS)
                 truth[qname] = (name, L, f"ref{ri:03d}.wav", trans, tempo)
+                where[qname] = {"edit": name, "length_s": L, "reference": f"ref{ri:03d}.wav", "source_song": Path(src).name,
+                                "transposition": trans, "tempo": tempo, "at_s": at / FS, "ref_start_s": start / FS,
+                                "copy_len_s": len(edited) / FS}
     # --- scan
     t0 = time.time()
     rep = scan.run(out / "queries", out / "reference", progress=scan.stderr_progress)
@@ -218,9 +215,9 @@ def main():
     L_ += ["", f"Copies where a match was reported but to the WRONG reference song: {len(wrong)}", "",
            "## Send this file back", "", "Also tell me how long it took and which edits (if any) were skipped."]
     (out / "results.md").write_text("\n".join(L_), encoding="utf-8")
-    from musicleak.report import write_reports, write_html_report
+    (out / "truth.json").write_text(json.dumps(where, indent=1), encoding="utf-8")        # ground truth of every planted copy
+    from musicleak.report import write_reports
     write_reports(rep, out / "report")
-    write_html_report(rep, out / "report" / "musicleak_report.html")
     print("\n".join(L_))
     print(f"\nwritten to {out / 'results.md'}")
 

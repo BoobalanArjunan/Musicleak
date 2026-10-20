@@ -14,3 +14,7 @@ htmlcov/
 scratch/
 data/
 real_check_quick/
+refs/
+others/
+real_check_big/
+real_check_big2/
