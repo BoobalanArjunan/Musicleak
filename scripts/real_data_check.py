@@ -102,13 +102,23 @@ def main():
     ap.add_argument("--out", type=Path, default=Path("real_check"))
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
+    import itertools
+
+    default_ref = Path("data/real_eval/reference")
+    default_unrel = Path("data/real_eval/unrelated")
+
     if not a.musdb and not (a.reference_dir and a.unrelated_dir):
-        sys.exit("give --musdb, or both --reference-dir and --unrelated-dir")
+        if default_ref.is_dir() and default_unrel.is_dir():
+            a.reference_dir = default_ref
+            a.unrelated_dir = default_unrel
+        else:
+            sys.exit("give --musdb, or both --reference-dir and --unrelated-dir")
     ref_files, unrel_files = find_songs(a)
     if len(ref_files) < 10 or len(unrel_files) < 10:
         sys.exit(f"need at least 10 reference and 10 unrelated songs (found {len(ref_files)} and {len(unrel_files)})")
     rng = np.random.RandomState(a.seed)
-    ref_files = [ref_files[i] for i in rng.permutation(len(ref_files))[:a.refs]]
+    n_refs = min(a.refs, len(ref_files))
+    ref_files = [ref_files[i] for i in rng.permutation(len(ref_files))[:n_refs]]
     unrel_files = [unrel_files[i] for i in rng.permutation(len(unrel_files))]
     lengths = [int(v) for v in a.lengths.split(",")]
     out = a.out
@@ -130,14 +140,15 @@ def main():
 
     notes, truth = [], {}
     # --- unrelated clips
-    pool = iter(unrel_files)
+    pool = itertools.cycle(unrel_files)
     unrel_names = []
-    for i in range(a.unrelated):
+    n_unrelated = min(a.unrelated, len(unrel_files)) if a.unrelated == 40 and len(unrel_files) < 40 else a.unrelated
+    for i in range(n_unrelated):
         p = next(pool)
         name = f"unrelated_{i:03d}.wav"
         sf.write(str(out / "queries" / name), clip(p, a.clip_s), FS)
         unrel_names.append(name)
-    other = lambda n: 0.7 * clip(next(pool, unrel_files[0]), n / FS)
+    other = lambda n: 0.7 * clip(next(pool), n / FS)
     E = edits(other)
     skipped = []
     ok_edits = {}
@@ -207,8 +218,9 @@ def main():
     L_ += ["", f"Copies where a match was reported but to the WRONG reference song: {len(wrong)}", "",
            "## Send this file back", "", "Also tell me how long it took and which edits (if any) were skipped."]
     (out / "results.md").write_text("\n".join(L_), encoding="utf-8")
-    from musicleak.report import write_reports
+    from musicleak.report import write_reports, write_html_report
     write_reports(rep, out / "report")
+    write_html_report(rep, out / "report" / "musicleak_report.html")
     print("\n".join(L_))
     print(f"\nwritten to {out / 'results.md'}")
 
