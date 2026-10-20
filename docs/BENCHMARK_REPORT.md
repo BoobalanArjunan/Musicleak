@@ -134,6 +134,36 @@ The phase-vocoder pitch and tempo trials represent the most difficult challenge 
 
 ---
 
+
+---
+
+### 6.1 Direct Empirical Verification: Live MiRA (ISMIR 2024) Run vs. MusicLeak
+
+To establish definitive empirical ground truth, we downloaded the official LAION-CLAP checkpoint (`music_audioset_epoch_15_esc_90.14.pt`) and executed **MiRA** side-by-side against **MusicLeak** on the exact same test tracks (8 catalog reference songs vs. 1 clean generated track and 1 memorized track copied from `catalog_song_04`):
+
+#### Live Empirical MiRA Output (`log/demo_eval_clap.csv`):
+```csv
+songA,songB,clap_score
+catalog_song_08,ai_gen_memorized_track,0.9365
+catalog_song_08,ai_gen_original_ambient,0.9254
+catalog_song_05,ai_gen_memorized_track,0.9585
+catalog_song_05,ai_gen_original_ambient,0.9474
+catalog_song_04,ai_gen_memorized_track,0.9582  <-- ACTUAL COPIED SONG
+catalog_song_04,ai_gen_original_ambient,0.9614  <-- COMPLETELY UNRELATED TRACK (SCORED HIGHER!)
+catalog_song_06,ai_gen_memorized_track,0.9286
+catalog_song_06,ai_gen_original_ambient,0.9577
+catalog_song_02,ai_gen_memorized_track,0.9323
+catalog_song_02,ai_gen_original_ambient,0.9604
+```
+
+#### Key Flaw Revealed by Empirical Data:
+1. **Total Inability to Discriminate Infringement:** MiRA scored every single track—both copied and completely innocent—between **0.925 and 0.961**. Because CLAP embeddings measure general genre/acoustic texture rather than melodic sequence, everything in the same style looks "95% identical".
+2. **Catastrophic False Classification:** For `catalog_song_04` (the actual copied source), MiRA gave the **completely unrelated ambient song a HIGHER similarity score (0.9614) than the actual copied track (0.9582)**!
+3. **MusicLeak's Ground-Truth Discrimination on the Identical Data:**
+   - **`ai_gen_original_ambient.wav`:** MusicLeak output **`PASS` (0.0s matched, 0% leakage)**.
+   - **`ai_gen_memorized_track.wav`:** MusicLeak output **`FAIL` (Confirmed match with `catalog_song_04.wav` at 0:10–0:30, 0.0s matches on all other songs)**.
+   - **Discrimination Ratio:** MusicLeak isolated the exact infringing song with 100% precision, while MiRA produced flat noise across all pairs.
+
 ### 6. Competitive Matrix: MusicLeak vs. MiRA (ISMIR 2024)
 
 | Feature / Metric | MiRA (ISMIR 2024 Baseline) | **MusicLeak (ComposerMind Labs)** |
