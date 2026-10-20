@@ -219,7 +219,9 @@ def scan_query(name: str, C: np.ndarray, lib: Library, cal: Calibration, win_s: 
         j = k
         while j + 1 < len(seq) and seq[j + 1] is not None and _consistent((seq[j][1], seq[j][2], 0), (seq[j + 1][1], seq[j + 1][2], 0), seq[j + 1][0] - seq[j][0]):
             j += 1
-        if seq[j][0] - seq[k][0] >= win:                           # the two ends do not overlap: independent evidence
+        # Confirmed if non-overlapping (original >= win rule) OR a consistent chain of >= 2 windows with strong evidence (at least one window >= cal.single)
+        is_confirmed = (seq[j][0] - seq[k][0] >= win) or (j > k and any(seq[w][2].score >= cal.single for w in range(k, j + 1)))
+        if is_confirmed:
             res.matches.append(_make_match("confirmed", seq[k:j + 1], lib, win))
             used.update(range(k, j + 1))
         k = j + 1
