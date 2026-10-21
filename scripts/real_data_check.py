@@ -100,6 +100,7 @@ def main():
     ap.add_argument("--unrelated", type=int, default=40, help="unrelated query clips for the false-alarm rate (default 40)")
     ap.add_argument("--reps", type=int, default=2, help="planted copies per edit and length (default 2)")
     ap.add_argument("--lengths", default="10,20,30", help="copied lengths in seconds (default 10,20,30)")
+    ap.add_argument("--host-gain", type=float, default=0.15, help="loudness of the unrelated song the copy is hidden in (default 0.15; 0 = the copy alone, which shows the matcher without mixing)")
     ap.add_argument("--clip-s", type=float, default=60.0, help="length of each query clip (default 60)")
     ap.add_argument("--out", type=Path, default=Path("real_check"))
     ap.add_argument("--seed", type=int, default=0)
@@ -163,7 +164,7 @@ def main():
                 edited, trans, tempo = fn(piece.astype(np.float32))
                 host = clip(next(pool), a.clip_s)
                 at = int(rng.uniform(5, max(6, a.clip_s - L * 1.15 - 5)) * FS)
-                q = 0.15 * host
+                q = a.host_gain * host
                 end = min(len(q), at + len(edited))
                 q[at:end] += norm(edited, 0.8)[:end - at]
                 qname = f"copy_{len(truth):03d}.wav"

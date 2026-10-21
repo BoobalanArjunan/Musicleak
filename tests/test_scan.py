@@ -192,3 +192,50 @@ def test_windows_chain_only_if_same_song_same_transposition_and_a_steady_place()
     assert scan._consistent(a, (0, Hit(0.9, 150 + 14, 3, 1.0), 0), hop)          # within the tolerance
     assert not scan._consistent(a, (0, Hit(0.9, 150 + 20, 3, 1.0), 0), hop)
     assert scan._consistent((0, Hit(0.9, 100, 3, 1.12), 0), (0, Hit(0.9, 156, 3, 1.12), 0), hop)
+
+
+def test_a_chain_survives_a_stretch_that_scored_low_in_the_middle(library):
+    """A copy whose middle was damaged (or is a sustained pad that matches poorly) still has two clean stretches far apart in the
+    same place: that is independent evidence, so it is confirmed rather than left as two lone windows."""
+    d, lib, cal = library
+    src = song(100)
+    x, _ = synth.excerpt_in_new_song(src, 5.0, 30.0, 901, seconds=60.0, at_s=10.0)
+    a, b = int(20.0 * synth.SR), int(30.0 * synth.SR)                 # 10 s in the middle of the copy are wrecked
+    x = x.copy()
+    x[a:b] = 0.5 * np.random.RandomState(0).randn(b - a).astype(np.float32)
+    r = scan_query("q", chroma(x), lib, cal, 10.0, 5.0)
+    assert r.verdict() == "FAIL"
+    m = [m for m in r.matches if m.kind == "confirmed"][0]
+    assert m.ref == "ref00.wav" and m.q_start <= 12.0 and m.q_end >= 38.0          # both clean ends are in one confirmed match
+
+
+def test_two_windows_far_apart_in_different_places_are_not_chained(library):
+    """Skipping windows must not let two unrelated hits join up: the places in the reference must fit a steady copy."""
+    d, lib, cal = library
+    a = synth.excerpt_in_new_song(song(100), 5.0, 12.0, 902, seconds=60.0, at_s=5.0)[0]
+    b = synth.excerpt_in_new_song(song(100), 25.0, 12.0, 903, seconds=60.0, at_s=40.0)[0]   # later part of the same song, played out of order
+    mix = a.copy()
+    mix[int(40 * synth.SR):int(52 * synth.SR)] = b[int(40 * synth.SR):int(52 * synth.SR)]
+    r = scan_query("q", chroma(mix), lib, cal, 10.0, 5.0)
+    assert not any(m.kind == "confirmed" and m.q_end - m.q_start > 35 for m in r.matches)          # not one long steady copy
+
+
+def test_a_chain_cannot_skip_more_windows_than_the_limit(library, monkeypatch):
+    d, lib, cal = library
+    x, _ = synth.excerpt_in_new_song(song(100), 5.0, 30.0, 901, seconds=60.0, at_s=10.0)
+    a, b = int(20.0 * synth.SR), int(30.0 * synth.SR)
+    x = x.copy()
+    x[a:b] = 0.5 * np.random.RandomState(0).randn(b - a).astype(np.float32)
+    monkeypatch.setattr(scan, "MAX_GAP_WINDOWS", 1)                   # this damaged stretch needs a chain to skip 2 windows
+    r = scan_query("q", chroma(x), lib, cal, 10.0, 5.0)
+    assert not any(m.kind == "confirmed" and m.ref == "ref00.wav" and m.q_end - m.q_start > 20 for m in r.matches)
+
+
+def test_the_windows_of_a_confirmed_chain_are_not_also_reported_as_lone_possibles(library):
+    d, lib, cal = library
+    x, _ = synth.excerpt_in_new_song(song(100), 5.0, 30.0, 901, seconds=60.0, at_s=10.0)
+    a, b = int(20.0 * synth.SR), int(30.0 * synth.SR)
+    x = x.copy()
+    x[a:b] = 0.5 * np.random.RandomState(0).randn(b - a).astype(np.float32)
+    r = scan_query("q", chroma(x), lib, cal, 10.0, 5.0)
+    assert [m.kind for m in r.matches if m.ref == "ref00.wav"] == ["confirmed"]

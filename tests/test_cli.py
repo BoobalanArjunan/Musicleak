@@ -72,7 +72,7 @@ def test_cli_usage_errors_exit_2(world, tmp_path, capsys):
 def test_version_flag(capsys):
     with pytest.raises(SystemExit) as e:
         main(["--version"])
-    assert e.value.code == 0 and "musicleak 0.1.0a1" in capsys.readouterr().out
+    assert e.value.code == 0 and "musicleak 0.1.0a2" in capsys.readouterr().out
 
 
 def test_text_report_gives_seconds_and_share_of_the_song():

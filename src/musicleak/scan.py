@@ -17,6 +17,7 @@ CHAIN_PCT = 95.0             # consistent windows above this, the first and last
 MIN_REFS_TO_CALIBRATE = 8    # fewer reference songs than this and the unrelated level cannot be measured from them
 FALLBACK = (0.90, 0.85)      # (single, chain) used when nothing can be calibrated; flagged in the report
 CALIB_WINDOWS = 150
+MAX_GAP_WINDOWS = 3          # a chain may skip up to this many windows that scored low (sustained pads, a damaged stretch) between two that matched
 CHAIN_TOL_S = 1.5            # consecutive windows must point to places in the reference this close to where a steady copy would
 
 
@@ -212,19 +213,22 @@ def scan_query(name: str, C: np.ndarray, lib: Library, cal: Calibration, win_s: 
         seq.append((w0, bi, h) if h is not None and s >= cal.chain else None)
     used = set()
     k = 0
-    while k < len(seq):                                           # chains of consistent windows above the chain level
+    while k < len(seq):                                           # chains of consistent windows above the chain level; low-scoring windows in between may be skipped
         if seq[k] is None:
             k += 1
             continue
-        j = k
-        while j + 1 < len(seq) and seq[j + 1] is not None and _consistent((seq[j][1], seq[j][2], 0), (seq[j + 1][1], seq[j + 1][2], 0), seq[j + 1][0] - seq[j][0]):
+        chain = [k]
+        j = k + 1
+        while j < len(seq) and j - chain[-1] - 1 <= MAX_GAP_WINDOWS:
+            if seq[j] is not None and _consistent((seq[chain[-1]][1], seq[chain[-1]][2], 0), (seq[j][1], seq[j][2], 0), seq[j][0] - seq[chain[-1]][0]):
+                chain.append(j)
             j += 1
-        # Confirmed if non-overlapping (original >= win rule) OR a consistent chain of >= 2 windows with strong evidence (at least one window >= cal.single)
-        is_confirmed = (seq[j][0] - seq[k][0] >= win) or (j > k and any(seq[w][2].score >= cal.single for w in range(k, j + 1)))
+        # Confirmed if non-overlapping ends (>= win) OR a consistent chain of >= 2 windows with strong evidence (at least one window >= cal.single)
+        is_confirmed = seq[chain[-1]][0] - seq[k][0] >= win
         if is_confirmed:
-            res.matches.append(_make_match("confirmed", seq[k:j + 1], lib, win))
-            used.update(range(k, j + 1))
-        k = j + 1
+            res.matches.append(_make_match("confirmed", [seq[i] for i in chain], lib, win))
+            used.update(chain)
+        k = chain[-1] + 1
     # Adaptive refinement: for isolated high-confidence windows (>= cal.single) not chained on the coarse grid,
     # probe a half-step offset specifically against that reference to verify consistent temporal tracking
     for k in range(len(seq)):
