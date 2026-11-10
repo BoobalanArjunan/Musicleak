@@ -18,7 +18,7 @@ shift reported, **any format** soundfile reads, and **no model downloads** (plai
 ## Install and use
 
 ```bash
-pip install --pre musicleak
+pip install -e ".[dev]"
 musicleak check generated_songs/ --reference training_songs/ --out report/ --html report/musicleak_report.html
 ```
 
@@ -103,4 +103,6 @@ A deliberate-bug check (37 planted bugs in the code) is caught by the suite. CI 
 
 MiRA (Batlle-Roca et al., ISMIR 2024) for replication assessment; commercial services (audio fingerprinting, lyrics screening) match against rights-holder catalogues instead of your own training set.
 
-Licence: MIT.
+## License
+
+MIT. Copyright (c) 2026 Boobalan Arjunan.

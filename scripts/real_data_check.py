@@ -36,7 +36,7 @@ try:
     from musicleak import scan
     from musicleak.features import FS, load_mono
 except ImportError:
-    sys.exit("musicleak is not installed (pip install --pre musicleak, or pip install -e . from a checkout)")
+    sys.exit("musicleak is not installed (run pip install -e . from a checkout)")
 
 try:
     import librosa
